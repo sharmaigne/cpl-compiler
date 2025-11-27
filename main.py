@@ -82,6 +82,8 @@ class App(tk.Tk):
         self.file_name = self.DEFAULT_FILENAME
         self.update_title("New file")
         self.editor_panel.editor.delete("1.0", "end")
+        with self.console_panel.console as console:
+            console.delete("1.0", "end")
 
         self.is_tokenized = False
 
@@ -124,7 +126,7 @@ class App(tk.Tk):
     def display_tokenized(self):
         if not self.is_tokenized:
             with self.console_panel.console as console:
-                console.insert("end", "No tokenized code found.")
+                console.insert("end", "No tokenized code found.\n")
 
             return
 

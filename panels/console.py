@@ -21,15 +21,15 @@ class ConsolePanel(tk.Frame):
         error_tokens = [t for t in tokens if t.name == TokenType.ERR_LEX]
 
         with self.console as console:
-            console.insert("1.0 linestart", "Tokenization complete.\n\n")
+            console.insert("end", "Tokenization complete.\n")
 
             if not error_tokens:
                 return
 
-            console.insert("3.0 linestart", "Error lexemes found:\n\n")
+            console.insert("end", "Error lexemes found:\n")
 
-            for line, token in enumerate(error_tokens, 5):
-                console.insert(f"{line}.0 linestart", f"{token}\n")
+            for token in error_tokens:
+                console.insert(f"end", f"{token}\n")
 
     def display_tokenized_code(self, tokens: list[str]):
         with self.console as console:
@@ -37,3 +37,5 @@ class ConsolePanel(tk.Frame):
 
             for line in tokens:
                 console.insert("end", f"{line}")
+
+            console.insert("end", "\n")
