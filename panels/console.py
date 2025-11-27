@@ -30,3 +30,10 @@ class ConsolePanel(tk.Frame):
 
             for line, token in enumerate(error_tokens, 5):
                 console.insert(f"{line}.0 linestart", f"{token}\n")
+
+    def display_tokenized_code(self, tokens: list[str]):
+        with self.console as console:
+            console.insert("end", "\n")
+
+            for line in tokens:
+                console.insert("end", f"{line}")
