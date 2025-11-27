@@ -14,8 +14,6 @@ class App(tk.Tk):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-        self.file_name = self.DEFAULT_FILENAME
-        self.update_title("New file")
         self.geometry("900x560")
 
         self.init_menubar()
@@ -26,6 +24,8 @@ class App(tk.Tk):
 
         self.init_editor_panel()
         self.init_console_panel()
+
+        self.cleanup()
 
     def update_title(self, new_title):
         """Update the title while maintaining IOL suffix"""
@@ -74,14 +74,23 @@ class App(tk.Tk):
             self.editor_panel, height=self.winfo_vrootheight() * 3 / 5
         )
 
-    def file_new(self):
-        # TODO: handle new file
+    def cleanup(self):
+        """
+        Run for new file. Clean up previous set state.
+        """
+
         self.file_name = self.DEFAULT_FILENAME
         self.update_title("New file")
         self.editor_panel.editor.delete("1.0", "end")
+        with self.console_panel.console as console:
+            console.delete("1.0", "end")
+
+        self.is_tokenized = False
+
+    def file_new(self):
+        self.cleanup()
 
     def file_open(self):
-        # TODO: handle file open
         file = fd.askopenfile(
             title="Open File",
             filetypes=[("Integer Oriented Language files", "*.iol")],
@@ -91,12 +100,12 @@ class App(tk.Tk):
         if not file:
             return
 
+        self.cleanup()
         with file as f:
             self.file_name = f.name.split("/")[-1]
             self.update_title(self.file_name)
 
             content = f.readlines()
-            self.editor_panel.editor.delete("1.0", "end")  # clear content
             self.editor_panel.editor.insert("1.0", "".join(content))
 
     def compile_tokenize(self):
@@ -109,8 +118,22 @@ class App(tk.Tk):
         with open(f"{self.file_name.rstrip('.iol')}.tkn", "w") as f:
             f.writelines("\n".join(map(str, lexer.tokens)))
 
+        self.is_tokenized = True
+
         # write results into console
         self.console_panel.display_tokenization_result(lexer.tokens)
+
+    def display_tokenized(self):
+        if not self.is_tokenized:
+            with self.console_panel.console as console:
+                console.insert("end", "No tokenized code found.\n")
+
+            return
+
+        with open(f"{self.file_name.rstrip('.iol')}.tkn", "r") as f:
+            lines = f.readlines()
+
+        self.console_panel.display_tokenized_code(lines)
 
 
 class AppMenu(tk.Menu):
@@ -137,6 +160,11 @@ class AppMenu(tk.Menu):
         menu_compile.add_command(
             label="Tokenize",
             command=self.parent.compile_tokenize,
+        )
+
+        menu_compile.add_command(
+            label="Show tokenized code",
+            command=self.parent.display_tokenized,
         )
         self.add_cascade(menu=menu_compile, label="Compile")
 
