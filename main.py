@@ -14,6 +14,7 @@ class App(tk.Tk):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
+        self.update_title("New file")
         self.geometry("900x560")
 
         self.init_menubar()
@@ -78,7 +79,7 @@ class App(tk.Tk):
         """
         Run for new file. Clean up previous set state.
         """
-
+        self.file_path = None
         self.file_name = self.DEFAULT_FILENAME
         self.update_title("New file")
         self.editor_panel.editor.delete("1.0", "end")
@@ -96,13 +97,13 @@ class App(tk.Tk):
             filetypes=[("Integer Oriented Language files", "*.iol")],
         )
 
-        # No file selected
         if not file:
             return
 
         self.cleanup()
         with file as f:
-            self.file_name = f.name.split("/")[-1]
+            self.file_path = f.name  # Store full path
+            self.file_name = self.file_path.split("/")[-1]
             self.update_title(self.file_name)
 
             content = f.readlines()
@@ -135,6 +136,54 @@ class App(tk.Tk):
 
         self.console_panel.display_tokenized_code(lines)
 
+    def file_save(self):
+        content = self.editor_panel.editor.get("1.0", "end").strip()
+
+        if self.file_path:
+            with open(self.file_path, "w") as f:
+                f.write(content)
+        else:
+            file = fd.asksaveasfile(
+                title="Save",
+                filetypes=[("Integer Oriented Language files", "*.iol")],
+                defaultextension=".iol",
+                initialfile=self.file_name,
+            )
+
+            if not file:
+                return
+
+            self.file_path = file.name
+            self.file_name = self.file_path.split("/")[-1]
+
+            with file as f:
+                f.write(content)
+
+            self.update_title(self.file_name)
+
+    def file_save_as(self):
+        content = self.editor_panel.editor.get("1.0", "end").strip()
+
+        file = fd.asksaveasfile(
+            title="Save As",
+            filetypes=[("Integer Oriented Language files", "*.iol")],
+            defaultextension=".iol",
+            initialfile=(
+                self.file_name if self.file_path is None else self.file_name
+            ),
+        )
+
+        if not file:
+            return
+
+        self.file_path = file.name
+        self.file_name = self.file_path.split("/")[-1]
+
+        with file as f:
+            f.write(content)
+
+        self.update_title(self.file_name)
+
 
 class AppMenu(tk.Menu):
     def __init__(self, parent, *args, **kwargs) -> None:
@@ -151,6 +200,8 @@ class AppMenu(tk.Menu):
 
         menu_file.add_command(label="New File", command=self.parent.file_new)
         menu_file.add_command(label="Open File", command=self.parent.file_open)
+        menu_file.add_command(label="Save", command=self.parent.file_save)
+        menu_file.add_command(label="Save As", command=self.parent.file_save_as)
 
         self.add_cascade(menu=menu_file, label="File")
 
