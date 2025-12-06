@@ -1,5 +1,6 @@
 import ast_nodes
 from errors import ErrorCode, ParseError
+from lexer import TokenType
 
 
 class Token:
@@ -8,7 +9,7 @@ class Token:
         content = raw_text.strip()[1:-1]  # remove < and >
 
         parts = list(map(lambda x: x.strip(), content.split()))
-        self.type = parts[0]
+        self.type = TokenType[parts[0]]
 
         # Parsing parts
         if parts[1] == "=":
@@ -27,9 +28,11 @@ class Token:
 
 class Parser:
     def __init__(self, token_file):
-        self.tokens = self.load_tokens(token_file)
+        self.tokens: list[Token] = self.load_tokens(token_file)
         self.current_idx = 0
-        self.symbol_table = {}  # Stores { variable_name: "INT" or "STR" }
+        self.symbol_table: dict[str, TokenType] = (
+            {}
+        )  # Stores { variable_name: TokenType.INT or TokenType.STR }
         self.errors = []
         self.ast = None
 
@@ -52,10 +55,10 @@ class Parser:
 
         return token_list
 
-    def current_token(self):
+    def current_token(self) -> Token:
         if self.current_idx < len(self.tokens):
             return self.tokens[self.current_idx]
-        return Token("<EOF [0,0]>")
+        return Token(f"<{TokenType.EOF.name} [0,0]>")
 
     def advance(self):
         self.current_idx += 1
@@ -105,26 +108,26 @@ class Parser:
         This prevents one error from cascading into 100 errors.
         """
         self.advance()
-        while self.current_token().type != "EOF":
+        while self.current_token().type != TokenType.EOF:
             # If the previous token was a newline, we are likely at a clean start
-            if self.tokens[self.current_idx - 1].type == "NEWLN":
+            if self.tokens[self.current_idx - 1].type == TokenType.NEWLN:
                 return
 
             # If we see a keyword that starts a statement, we can resume parsing
             if self.current_token().type in [
-                "INT",
-                "STR",
-                "INTO",
-                "BEG",
-                "PRINT",
-                "NEWLN",
-                "LOI",
+                TokenType.INT,
+                TokenType.STR,
+                TokenType.INTO,
+                TokenType.BEG,
+                TokenType.PRINT,
+                TokenType.NEWLN,
+                TokenType.LOI,
             ]:
                 return
 
             self.advance()
 
-    def match(self, expected_type):
+    def match(self, expected_type: TokenType):
         """Consumes current token if it matches expected_type"""
         token = self.current_token()
 
@@ -134,8 +137,8 @@ class Parser:
 
         self.syntax_error(
             ErrorCode.UNEXPECTED_TOKEN,
-            expected=expected_type,
-            actual=token.type,
+            expected=expected_type.name,
+            actual=token.type.name,
         )
 
     # ==========================================
@@ -152,7 +155,7 @@ class Parser:
         # If we finish parse_program and there are tokens left (except EOF), that's an issue
         if (
             self.current_idx < len(self.tokens)
-            and self.current_token().type != "EOF"
+            and self.current_token().type != TokenType.EOF
         ):
             self.semantic_error(ErrorCode.CODE_AFTER_LOI)
 
@@ -164,52 +167,48 @@ class Parser:
 
         statements = []
         try:
-            self.match("IOL")
+            self.match(TokenType.IOL)
         except ParseError:
             self.synchronize()
 
-        while self.current_token().type != "LOI":
+        while self.current_token().type != TokenType.LOI:
             try:
                 statement = self.parse_statement()
                 statements.append(statement)
             except ParseError:
                 self.synchronize()
 
-        self.match("LOI")
-        self.match("EOF")
+        self.match(TokenType.LOI)
+        self.match(TokenType.EOF)
 
         return ast_nodes.Program(statements)
 
     def parse_statement(self) -> ast_nodes.ASTNode:
         """
         Determines which statement to parse based on the current token.
-        Options:
-        1. Variable Def: INT/STR ...
-        2. Assignment: INTO ...
-        3. Input: BEG ...
-        4. Output: PRINT ...
-        5. Newline: NEWLN
         """
         token_type = self.current_token().type
         statement_node = None
 
-        if token_type == "ERR_LEX":
+        if token_type == TokenType.ERR_LEX:
             self.lexical_error(
                 ErrorCode.UNKNOWN_WORD, word=self.current_token().value
             )
             self.advance()
-        elif token_type in ["INT", "STR"]:
+        elif token_type in [TokenType.INT, TokenType.STR]:
             statement_node = self.parse_variable_declaration()
-        elif token_type == "INTO":
+        elif token_type == TokenType.INTO:
             statement_node = self.parse_assignment()
-        elif token_type == "BEG":
+        elif token_type == TokenType.BEG:
             statement_node = self.parse_input()
-        elif token_type == "PRINT":
+        elif token_type == TokenType.PRINT:
             statement_node = self.parse_output()
-        elif token_type == "NEWLN":
-            self.match("NEWLN")
+        elif token_type == TokenType.NEWLN:
+            self.match(TokenType.NEWLN)
         else:
-            self.syntax_error(ErrorCode.UNEXPECTED_STATEMENT, token=token_type)
+            self.syntax_error(
+                ErrorCode.UNEXPECTED_STATEMENT, token=token_type.name
+            )
 
         return statement_node
 
@@ -222,32 +221,33 @@ class Parser:
         declared_type = type_token.type
         self.advance()
 
-        ident_token = self.match("IDENT")
+        ident_token = self.match(TokenType.IDENT)
         var_name = ident_token.value
 
         # SEMANTIC CHECK: Duplicate Declaration
         if var_name in self.symbol_table:
             self.semantic_error(ErrorCode.DUPLICATE_VAR, name=var_name)
-        self.symbol_table[var_name] = declared_type  # register variable
+
+        self.symbol_table[var_name] = declared_type.name  # register variable
 
         init_expr = None
 
         # Check for optional initialization: IS value
-        if self.current_token().type == "IS":
+        if self.current_token().type == TokenType.IS:
             self.advance()
-            if declared_type == "INT":
+            if declared_type == TokenType.INT:
                 init_expr = self.parse_expression()
 
-                if init_expr.eval_type != "INT":
+                if init_expr.eval_type != TokenType.INT:
                     self.semantic_error(
                         ErrorCode.TYPE_MISMATCH,
                         expr_type=init_expr.eval_type,
-                        target_type="INT",
+                        target_type=TokenType.INT,
                         name=var_name,
                     )
 
-            elif declared_type == "STR":
-                val_token = self.match("IDENT")
+            elif declared_type == TokenType.STR:
+                val_token = self.match(TokenType.IDENT)
                 source_var = val_token.value
 
                 if source_var not in self.symbol_table:
@@ -255,15 +255,15 @@ class Parser:
                         ErrorCode.UNDEFINED_VAR, name=source_var
                     )
 
-                if self.symbol_table[source_var] != "STR":
+                if self.symbol_table[source_var] != TokenType.STR:
                     self.semantic_error(
                         ErrorCode.TYPE_MISMATCH,
                         expr_type=self.symbol_table[source_var],  # INT
-                        target_type="STR",
+                        target_type=TokenType.STR,
                         name=var_name,
                     )
 
-                init_expr = ast_nodes.VarUsage(source_var, "STR")
+                init_expr = ast_nodes.VarUsage(source_var, TokenType.STR)
 
         return ast_nodes.VarDecl(declared_type, var_name, init_expr)
 
@@ -271,8 +271,8 @@ class Parser:
         """
         Assignment ::= 'INTO' Ident 'IS' Expression
         """
-        self.match("INTO")
-        ident_token = self.match("IDENT")
+        self.match(TokenType.INTO)
+        ident_token = self.match(TokenType.IDENT)
         var_name = ident_token.value
 
         # SEMANTIC CHECK: Variable must exist
@@ -281,26 +281,27 @@ class Parser:
         else:
             target_type = self.symbol_table[var_name]
 
-        self.match("IS")
-        expr_type = self.parse_expression()
+        self.match(TokenType.IS)
+        expr_node = self.parse_expression()
+        expr_type = expr_node.eval_type
 
         # SEMANTIC CHECK: Type Compatibility
         if target_type != expr_type:
             self.semantic_error(
                 ErrorCode.TYPE_MISMATCH,
-                expr_type=expr_type,
-                target_type=target_type,
+                expr_type=expr_type.name,
+                target_type=target_type.name,
                 name=var_name,
             )
 
-        return ast_nodes.Assignment(var_name, expr_type)
+        return ast_nodes.Assignment(var_name, expr_node)
 
     def parse_input(self) -> ast_nodes.InputStmt:
         """
         Input ::= 'BEG' Ident
         """
-        self.match("BEG")
-        ident_token = self.match("IDENT")
+        self.match(TokenType.BEG)
+        ident_token = self.match(TokenType.IDENT)
         var_name = ident_token.value
 
         # SEMANTIC CHECK: Variable must exist
@@ -313,13 +314,13 @@ class Parser:
         """
         Output ::= 'PRINT' Expression
         """
-        self.match("PRINT")
+        self.match(TokenType.PRINT)
         expr = self.parse_expression()
         return ast_nodes.OutputStmt(expr)
 
     def parse_expression(self) -> ast_nodes.ASTNode | None:
         """
-        Parses an expression and returns its TYPE ("INT" or "STR").
+        Parses an expression and returns its TYPE (TokenType.INT or TokenType.STR).
         Handles:
         1. Literals (INT_LIT)
         2. Variables (IDENT)
@@ -330,10 +331,10 @@ class Parser:
         # Case 1: Integer Literal
         if token.type == "INT_LIT":
             self.advance()
-            return ast_nodes.Literal(token.value, "INT")
+            return ast_nodes.Literal(token.value, TokenType.INT)
 
         # Case 2: Variable
-        elif token.type == "IDENT":
+        elif token.type == TokenType.IDENT:
             var_name = token.value
             self.advance()
 
@@ -354,15 +355,20 @@ class Parser:
             right_node = self.parse_expression()
 
             # SEMANTIC CHECK: Math requires INTs
-            if left_node.eval_type != "INT" or right_node.eval_type != "INT":
+            if (
+                left_node.eval_type != TokenType.INT
+                or right_node.eval_type != TokenType.INT
+            ):
                 self.semantic_error(
                     ErrorCode.MATH_OPERAND_ERROR,
-                    op=op_type,
-                    t1=left_node.eval_type,
-                    t2=right_node.eval_type,
+                    op=op_type.name,
+                    t1=left_node.eval_type.name,
+                    t2=right_node.eval_type.name,
                 )
 
             return ast_nodes.BinOp(op_type, left_node, right_node)
 
         else:
-            self.syntax_error(ErrorCode.INVALID_EXPRESSION, token=token.type)
+            self.syntax_error(
+                ErrorCode.INVALID_EXPRESSION, token=token.type.name
+            )
