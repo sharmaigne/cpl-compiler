@@ -37,7 +37,7 @@ class Token:
     column: int
 
     def __str__(self) -> str:
-        value = f" = {self.value}" if self.value else ""
+        value = f" = {self.value}" if self.value is not None else ""
         name = str(self.name).lstrip("TokenType.")
         return f"<{name}{value} [{self.line},{self.column}]>"
 
