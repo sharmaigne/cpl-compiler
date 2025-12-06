@@ -1,5 +1,5 @@
 class Token:
-    def __init__(self, raw_text):
+    def __init__(self, raw_text: str):
         # Expected format: <TYPE [line,col]> or <TYPE = value [line,col]>
         # Removing < and >
         content = raw_text.strip()[1:-1]
@@ -7,12 +7,11 @@ class Token:
         # Parsing parts
         if " = " in content:
             # Case: IDENT = num1 [2,5] or INT_LIT = 10 [2,13]
-            parts = content.split(" = ")
+            parts = content.split()
             self.type = parts[0].strip()
+            self.value = parts[2].strip()
+            self.location = parts[3]  # [line,col]
 
-            rest = parts[1].rsplit(" ", 1)  # Split value and location
-            self.value = rest[0].strip()
-            self.location = rest[1]  # [line,col]
         else:
             # Case: IOL [1,1] or ADD [13,6]
             parts = content.rsplit(" ", 1)
@@ -105,7 +104,6 @@ class Parser:
         """Program ::= IOL <statements> LOI EOF"""
         self.match("IOL")
 
-        # Keep parsing statements until we hit LOI or EOF
         while self.current_token().type != "LOI":
             self.parse_statement()
 
