@@ -1,8 +1,10 @@
+from errors import ErrorCode
+
+
 class Token:
     def __init__(self, raw_text: str):
         # Expected format: <TYPE [line,col]> or <TYPE = value [line,col]>
-        # Removing < and >
-        content = raw_text.strip()[1:-1]
+        content = raw_text.strip()[1:-1]  # remove < and >
 
         parts = list(map(lambda x: x.strip(), content.split()))
         self.type = parts[0]
@@ -64,26 +66,41 @@ class Parser:
     #               ERROR HANDLING
     # ==========================================
 
-    def log_error(self, error_type, message):
-        """Unified helper to format all error messages consistently"""
+    def log_error(self, error_type, template, **kwargs):
+        """
+        Args:
+            error_type (str): "Syntax", "Semantic", or "Lexical"
+            template (str): The string from ErrorCode class with {placeholders}
+            **kwargs: The variables to fill the placeholders (e.g., name="var1")
+        """
         token = self.current_token()
-        # Format: [Type] Error at [Location]: Message
-        err_msg = f"{error_type} Error at {token.location}: {message}"
-        self.errors.append(err_msg)
-        return err_msg
 
-    def lexical_error(self, message):
+        # 1. Fill the placeholders in the message
+        try:
+            formatted_message = template.format(**kwargs)
+        except KeyError as e:
+            formatted_message = f"{template} (Missing info: {e})"
+
+        # 2. Add the location info
+        final_msg = (
+            f"[{error_type}] Error at {token.location}: {formatted_message}"
+        )
+
+        self.errors.append(final_msg)
+        return final_msg
+
+    def lexical_error(self, template, **kwargs):
         """Logs lexical error, DOES NOT raise (just skips token usually)"""
-        self.log_error("Lexical", message)
+        self.log_error("Lexical", template, **kwargs)
 
-    def syntax_error(self, message):
+    def syntax_error(self, template, **kwargs):
         """Logs syntax error and RAISES exception to trigger synchronization"""
-        err_msg = self.log_error("Syntax", message)
+        err_msg = self.log_error("Syntax", template, **kwargs)
         raise ParseError(err_msg)
 
-    def semantic_error(self, message):
+    def semantic_error(self, template, **kwargs):
         """Logs semantic error, DOES NOT raise (allows continuation)"""
-        self.log_error("Semantic", message)
+        self.log_error("Semantic", template, **kwargs)
 
     def synchronize(self):
         """
@@ -119,7 +136,9 @@ class Parser:
             return token
 
         self.syntax_error(
-            f"Expected token '{expected_type}', found '{token.type}'"
+            ErrorCode.UNEXPECTED_TOKEN,
+            expected=expected_type,
+            actual=token.type,
         )
 
     # ==========================================
@@ -138,9 +157,7 @@ class Parser:
             self.current_idx < len(self.tokens)
             and self.current_token().type != "EOF"
         ):
-            self.semantic_error(
-                "Code found after LOI. Program must end at LOI."
-            )
+            self.semantic_error(ErrorCode.CODE_AFTER_LOI)
 
         return True
 
@@ -173,9 +190,9 @@ class Parser:
         token_type = self.current_token().type
 
         if token_type == "ERR_LEX":
-            self.errors.append(
-                f"Unknown word found: {self.current_token.value}"
-            )  # lexical error
+            self.lexical_error(
+                ErrorCode.UNKNOWN_WORD, word=self.current_token().value
+            )
             self.advance()
         elif token_type in ["INT", "STR"]:
             self.parse_variable_declaration()
@@ -188,9 +205,7 @@ class Parser:
         elif token_type == "NEWLN":
             self.match("NEWLN")
         else:
-            self.syntax_error(
-                f"Unexpected token '{token_type}' found in statement context."
-            )
+            self.syntax_error(ErrorCode.UNEXPECTED_STATEMENT, token=token_type)
 
     def parse_variable_declaration(self):
         """
@@ -206,7 +221,7 @@ class Parser:
 
         # SEMANTIC CHECK: Duplicate Declaration
         if var_name in self.symbol_table:
-            self.semantic_error(f"Variable '{var_name}' is already defined.")
+            self.semantic_error(ErrorCode.DUPLICATE_VAR, name=var_name)
 
         # Register variable
         self.symbol_table[var_name] = declared_type
@@ -218,21 +233,26 @@ class Parser:
                 expr_type = self.parse_expression()
                 if expr_type != "INT":
                     self.semantic_error(
-                        f"Cannot assign {expr_type} expression to INT variable '{var_name}'"
+                        ErrorCode.TYPE_MISMATCH,
+                        expr_type=expr_type,
+                        target_type="INT",
+                        name=var_name,
                     )
-
             elif declared_type == "STR":
                 val_token = self.match("IDENT")
                 source_var = val_token.value
 
                 if source_var not in self.symbol_table:
                     self.semantic_error(
-                        f"Variable '{source_var}' used before definition."
+                        ErrorCode.UNDEFINED_VAR, name=source_var
                     )
 
                 if self.symbol_table[source_var] != "STR":
                     self.semantic_error(
-                        f"Cannot assign INT variable '{source_var}' to STR variable '{var_name}'"
+                        ErrorCode.TYPE_MISMATCH,
+                        expr_type=self.symbol_table[source_var],  # INT
+                        target_type="STR",
+                        name=var_name,
                     )
 
     def parse_assignment(self):
@@ -245,9 +265,7 @@ class Parser:
 
         # SEMANTIC CHECK: Variable must exist
         if var_name not in self.symbol_table:
-            self.semantic_error(
-                f"Variable '{var_name}' used before definition."
-            )
+            self.semantic_error(ErrorCode.UNDEFINED_VAR, name=var_name)
         else:
             target_type = self.symbol_table[var_name]
 
@@ -257,7 +275,10 @@ class Parser:
         # SEMANTIC CHECK: Type Compatibility
         if target_type != expr_type:
             self.semantic_error(
-                f"Cannot assign {expr_type} result to {target_type} variable '{var_name}'."
+                ErrorCode.TYPE_MISMATCH,
+                expr_type=expr_type,
+                target_type=target_type,
+                name=var_name,
             )
 
     def parse_input(self):
@@ -270,9 +291,7 @@ class Parser:
 
         # SEMANTIC CHECK: Variable must exist
         if var_name not in self.symbol_table:
-            self.semantic_error(
-                f"Variable '{var_name}' used in BEG before definition."
-            )
+            self.semantic_error(ErrorCode.UNDEFINED_VAR, name=var_name)
 
     def parse_output(self):
         """
@@ -303,9 +322,7 @@ class Parser:
 
             # SEMANTIC CHECK: Defined?
             if var_name not in self.symbol_table:
-                self.semantic_error(
-                    f"Variable '{var_name}' used in expression before definition."
-                )
+                self.semantic_error(ErrorCode.UNDEFINED_VAR, name=var_name)
 
             return self.symbol_table[var_name]
 
@@ -321,12 +338,10 @@ class Parser:
             # SEMANTIC CHECK: Math requires INTs
             if type1 != "INT" or type2 != "INT":
                 self.semantic_error(
-                    f"Operation {op_type} requires INT operands. Found {type1} and {type2}."
+                    ErrorCode.MATH_OPERAND_ERROR, op=op_type, t1=type1, t2=type2
                 )
 
             return "INT"  # Result of math is always INT
 
         else:
-            self.syntax_error(
-                f"Expected expression (Literal, Variable, or Operation), found '{token.type}'"
-            )
+            self.syntax_error(ErrorCode.INVALID_EXPRESSION, token=token.type)
