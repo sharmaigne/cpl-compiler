@@ -1,11 +1,14 @@
 import io
 import tkinter as tk
 from tkinter import filedialog as fd
+from tkinter import simpledialog as sd
 
+from evaluator import Evaluator
 from lexer import Lexer
 from panels.console import ConsolePanel
 from panels.editor import EditorPanel
 from panels.output import OutputPanel
+from syntax.parser import Parser
 
 
 class App(tk.Tk):
@@ -184,6 +187,65 @@ class App(tk.Tk):
 
         self.update_title(self.file_name)
 
+    def append_output(self, text):
+        """Callback for the Evaluator to print to the ConsolePanel."""
+        # Using the context manager pattern from console.py
+        with self.console_panel.console as console:
+            console.insert("end", f"{text}")
+            console.see("end")
+
+    def request_input(self, prompt_text):
+        """Callback for the Evaluator to get input via Popup."""
+        return sd.askstring("Program Input", prompt_text, parent=self)
+
+    def execute_code(self):
+        """Full pipeline: Lex -> Parse -> Eval"""
+
+        # 1. Clear previous output
+        # (Adjust this based on your OutputPanel implementation)
+        if hasattr(self.output_panel, "text_area"):
+            self.output_panel.text_area.delete("1.0", "end")
+
+        # 2. Get Source Code
+        code_content = self.editor_panel.editor.get("1.0", "end").strip()
+        if not code_content:
+            return
+
+        try:
+            # 3. LEXER
+            stream = io.StringIO(code_content)
+            lexer = Lexer(stream)
+            lexer.tokenize()
+
+            # 4. PARSER
+            token_stream_str = "\n".join(map(str, lexer.tokens))
+            parser_input = io.StringIO(token_stream_str)
+
+            parser = Parser(parser_input)
+            ast = parser.parse()
+
+            if parser.errors:
+                # Print errors to console panel
+                with self.console_panel.console as console:
+                    console.delete("1.0", "end")
+                    console.insert("end", "Compilation Errors:\n")
+                    for err in parser.errors:
+                        console.insert("end", f"{err}\n")
+                return
+
+            # 5. EVALUATOR
+            # Pass the GUI methods as callbacks
+            evaluator = Evaluator(
+                ast, on_print=self.append_output, on_input=self.request_input
+            )
+
+            self.append_output("--- Program Execution Start ---\n\n")
+            evaluator.evaluate()
+            self.append_output("\n\n--- Program Execution End ---")
+
+        except Exception as e:
+            self.append_output(f"\nRuntime Error: {str(e)}")
+
 
 class AppMenu(tk.Menu):
     def __init__(self, parent, *args, **kwargs) -> None:
@@ -222,7 +284,9 @@ class AppMenu(tk.Menu):
     def init_execute_menu(self):
         menu_execute = tk.Menu(self)
 
-        # TODO: add execute commands
+        menu_execute.add_command(
+            label="Run Program", command=self.parent.execute_code
+        )
 
         self.add_cascade(menu=menu_execute, label="Execute")
 
