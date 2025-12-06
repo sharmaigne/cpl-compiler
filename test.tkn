@@ -1,0 +1,65 @@
+<IOL [1,1]>
+<INT [2,1]>
+<IDENT = num1 [2,5]>
+<IS [2,10]>
+<INT_LIT = 10 [2,13]>
+<INT [3,1]>
+<IDENT = num2 [3,5]>
+<IS [3,10]>
+<INT_LIT = 20 [3,13]>
+<INT [4,1]>
+<IDENT = result [4,5]>
+<STR [5,1]>
+<IDENT = name [5,5]>
+<BEG [7,1]>
+<IDENT = name [7,5]>
+<PRINT [8,1]>
+<IDENT = num1 [8,7]>
+<NEWLN [9,1]>
+<PRINT [10,1]>
+<IDENT = num2 [10,7]>
+<NEWLN [11,1]>
+<IDENT = num1 [13,1]>
+<ADD [13,6]>
+<IDENT = num2 [13,10]>
+<INTO [13,15]>
+<IDENT = result [13,20]>
+<PRINT [14,1]>
+<IDENT = result [14,7]>
+<NEWLN [15,1]>
+<IDENT = num2 [17,1]>
+<SUB [17,6]>
+<IDENT = num1 [17,10]>
+<INTO [17,15]>
+<IDENT = result [17,20]>
+<PRINT [18,1]>
+<IDENT = result [18,7]>
+<NEWLN [19,1]>
+<IDENT = num1 [21,1]>
+<MULT [21,6]>
+<IDENT = num2 [21,11]>
+<INTO [21,16]>
+<IDENT = result [21,21]>
+<PRINT [22,1]>
+<IDENT = result [22,7]>
+<NEWLN [23,1]>
+<IDENT = num2 [25,1]>
+<DIV [25,6]>
+<IDENT = num1 [25,10]>
+<INTO [25,15]>
+<IDENT = result [25,20]>
+<PRINT [26,1]>
+<IDENT = result [26,7]>
+<NEWLN [27,1]>
+<IDENT = num2 [29,1]>
+<MOD [29,6]>
+<IDENT = num1 [29,10]>
+<INTO [29,15]>
+<IDENT = result [29,20]>
+<PRINT [30,1]>
+<IDENT = result [30,7]>
+<NEWLN [31,1]>
+<PRINT [33,1]>
+<IDENT = name [33,7]>
+<LOI [34,1]>
+<EOF [34,4]>

@@ -35,29 +35,30 @@ uv run pytest # for testing
 
 EBNF
 ```
-- program    -> IOL body LOI EOF
-- body       -> { statement }
+Program			::= 'IOL' Statements 'LOI' 'EOF'
+Statements	::= { Statement }
 
-- statement  -> declaration
-			 | assignment
-			 | io_statement
-			 | newline_command
+Statement		::= VarDecl
+				|	Assignment
+				|	Input
+				|	Output
+				|	Newline
 
-- declaration -> INT IDENT [ IS INT_LIT ]
-			  | STR IDENT
+VarDecl      	::= 'INT' Ident [ 'IS' Expression ]
+				|	'STR' Ident [ 'IS' Ident ]
+Assignment   	::= 'INTO' Ident 'IS' Expression
+Input        	::= 'BEG' Ident
+Output       	::= 'PRINT' Expression
+Newline      	::= 'NEWLN'
 
-- assignment -> IDENT INTO expression
+Expression   ::= IntLiteral
+               | Ident
+               | MathOp Expression Expression
 
-- io_statement -> BEG IDENT
-			  | PRINT expression
+MathOp       ::= 'ADD' | 'SUB' | 'MULT' | 'DIV' | 'MOD'
 
-- newline_command -> NEWLN
-
-- expression -> term { (ADD | SUB) term }
-
-- term      -> factor { (MULT | DIV | MOD) factor }
-
-- factor    -> INT_LIT
-			| IDENT
-			| '(' expression ')'
+Ident        ::= Letter { Letter | Digit }
+IntLiteral   ::= Digit { Digit }
+Letter       ::= 'a'...'z' | 'A'...'Z'
+Digit        ::= '0'...'9'
 ```
