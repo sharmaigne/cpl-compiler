@@ -39,8 +39,9 @@ class Parser:
 
             lines = file_obj.readlines()
             for line in lines:
-                if line.strip():
-                    token_list.append(Token(line.strip()))
+                stripped = line.strip()
+                if stripped:
+                    token_list.append(Token(stripped))
 
         except Exception as e:
             print(f"Error reading token file: {e}")
