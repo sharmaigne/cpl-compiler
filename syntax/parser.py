@@ -264,7 +264,7 @@ class Parser:
                         name=var_name,
                     )
 
-                init_expr = ast_nodes.VarUsage(source_var, TokenType.STR)
+                init_expr = ast_nodes.VarUsage(source_var)
 
         return ast_nodes.VarDecl(declared_type, var_name, init_expr)
 
@@ -342,9 +342,7 @@ class Parser:
             # SEMANTIC CHECK: Defined?
             if var_name not in self.symbol_table:
                 self.semantic_error(ErrorCode.UNDEFINED_VAR, name=var_name)
-                return ast_nodes.VarUsage(
-                    var_name, TokenType.ERR_LEX
-                )  # unknown type
+                return ast_nodes.VarUsage(var_name)  # unknown type
 
             return ast_nodes(var_name, self.symbol_table[var_name])
 
@@ -364,13 +362,15 @@ class Parser:
             right_node = self.parse_expression()
 
             # SEMANTIC CHECK: Math requires INTs
-            # can be BinOp, IntLiteral, or VarUsage, if VarUsage, check if INT
+            # can be BinOp, IntLiteral, or VarUsage, if VarUsage, check if INT in symbol table
             if (
                 left_node == ast_nodes.VarUsage
-                and left_node.eval_type != TokenType.INT
+                and self.symbol_table.get(left_node.name, TokenType.ERR_LEX)
+                != TokenType.INT
             ) or (
                 right_node == ast_nodes.VarUsage
-                and right_node.eval_type != TokenType.INT
+                and self.symbol_table.get(right_node.name, TokenType.ERR_LEX)
+                != TokenType.INT
             ):
                 self.semantic_error(
                     ErrorCode.MATH_OPERAND_ERROR,
