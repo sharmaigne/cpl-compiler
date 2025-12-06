@@ -164,8 +164,12 @@ class App(tk.Tk):
 
         self.tokens = lexer.tokens  # Store for display
 
+        base_name = self.file_name
+        if base_name.endswith(".iol"):
+            base_name = base_name[:-4]  # Remove last 4 chars (.iol)
+
         # Save .tkn file
-        with open(f"{self.file_name.rstrip('.iol')}.tkn", "w") as f:
+        with open(f"{base_name}.tkn", "w") as f:
             f.writelines("\n".join(map(str, lexer.tokens)))
 
         # 4. PARSING
@@ -195,16 +199,19 @@ class App(tk.Tk):
                 )
 
     def display_tokenized(self):
-        if not self.is_tokenized:
+        """Displays the tokens from the last compilation."""
+        # Check memory instead of file
+        if not self.tokens:
             with self.console_panel.console as console:
-                console.insert("end", "No tokenized code found.\n")
-
+                console.insert(
+                    "end",
+                    "\n[System] No tokenized code found. Please Compile first.\n",
+                )
             return
 
-        with open(f"{self.file_name.rstrip('.iol')}.tkn", "r") as f:
-            lines = f.readlines()
+        formatted_tokens = [f"{str(token)}\n" for token in self.tokens]
 
-        self.console_panel.display_tokenized_code(lines)
+        self.console_panel.display_tokenized_code(formatted_tokens)
 
     def file_save(self):
         content = self.editor_panel.editor.get("1.0", "end").strip()
