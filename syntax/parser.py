@@ -205,6 +205,7 @@ class Parser:
             statement_node = self.parse_output()
         elif token_type == TokenType.NEWLN:
             self.match(TokenType.NEWLN)
+            statement_node = ast_nodes.NewlineStmt()
         else:
             self.syntax_error(
                 ErrorCode.UNEXPECTED_STATEMENT, token=token_type.name
