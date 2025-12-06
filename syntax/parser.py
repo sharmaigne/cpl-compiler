@@ -170,15 +170,22 @@ class Parser:
         except ParseError:
             self.synchronize()
 
-        while self.current_token().type != TokenType.LOI:
+        while (
+            self.current_token().type != TokenType.LOI
+            and self.current_token().type != TokenType.EOF
+        ):
             try:
                 statement = self.parse_statement()
                 statements.append(statement)
             except ParseError:
                 self.synchronize()
 
-        self.match(TokenType.LOI)
-        self.match(TokenType.EOF)
+        if self.current_token().type == TokenType.EOF:
+            self.semantic_error(ErrorCode.MISSING_LOI)
+            self.match(TokenType.EOF)
+            return ast_nodes.Program(statements)
+        else:
+            self.match(TokenType.LOI)
 
         return ast_nodes.Program(statements)
 
