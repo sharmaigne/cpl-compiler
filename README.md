@@ -36,7 +36,7 @@ uv run pytest # for testing
 EBNF
 ```
 Program			::= 'IOL' Statements 'LOI' 'EOF'
-StatementList	::= { Statement }
+Statements	::= { Statement }
 
 Statement		::= VarDecl
 				|	Assignment
@@ -46,10 +46,10 @@ Statement		::= VarDecl
 
 VarDecl      	::= 'INT' Ident [ 'IS' Expression ]
 				|	'STR' Ident [ 'IS' Ident ]
-Assignment   ::= 'INTO' Ident 'IS' Expression
-Input        ::= 'BEG' Ident
-Output       ::= 'PRINT' Expression
-Newline      ::= 'NEWLN'
+Assignment   	::= 'INTO' Ident 'IS' Expression
+Input        	::= 'BEG' Ident
+Output       	::= 'PRINT' Expression
+Newline      	::= 'NEWLN'
 
 Expression   ::= IntLiteral
                | Ident
