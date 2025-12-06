@@ -187,6 +187,7 @@ class App(tk.Tk):
             else:
                 self.last_compile_success = True
                 self.is_dirty = False  # Code is now clean
+                self.output_panel.display_variables(parser.symbol_table)
 
                 console.insert(
                     "end",
