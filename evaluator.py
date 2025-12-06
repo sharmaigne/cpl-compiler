@@ -74,6 +74,8 @@ class Evaluator:
 
         # Use the spec's suggested prompt format
         user_input = self.on_input(f"Input for {var_name}: ")
+        if user_input is None:
+            raise RuntimeException("Program execution cancelled by user.")
         self.on_print(f"Input for {var_name}: {user_input}\n")
 
         if target_meta["type"] == TokenType.INT:
