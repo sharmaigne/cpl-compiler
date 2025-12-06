@@ -364,9 +364,13 @@ class Parser:
             right_node = self.parse_expression()
 
             # SEMANTIC CHECK: Math requires INTs
+            # can be BinOp, IntLiteral, or VarUsage, if VarUsage, check if INT
             if (
-                left_node.eval_type != TokenType.INT
-                or right_node.eval_type != TokenType.INT
+                left_node == ast_nodes.VarUsage
+                and left_node.eval_type != TokenType.INT
+            ) or (
+                right_node == ast_nodes.VarUsage
+                and right_node.eval_type != TokenType.INT
             ):
                 self.semantic_error(
                     ErrorCode.MATH_OPERAND_ERROR,

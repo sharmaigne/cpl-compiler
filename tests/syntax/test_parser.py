@@ -120,7 +120,7 @@ def test_input():
     assert parser.errors == []
     stmt = ast.statements[1]
     assert isinstance(stmt, ast_nodes.InputStmt)
-    assert stmt.name == "x"
+    assert stmt.var_name == "x"
 
 
 def test_output_math():
