@@ -1,6 +1,6 @@
-import ast_nodes
-from errors import ErrorCode, ParseError
+import syntax.ast_nodes as ast_nodes
 from lexer import TokenType
+from syntax.errors import ErrorCode, ParseError
 
 
 class Token:
@@ -173,6 +173,7 @@ class Parser:
 
         while self.current_token().type != TokenType.LOI:
             try:
+                print("Parsing statement at token:", self.current_token())
                 statement = self.parse_statement()
                 statements.append(statement)
             except ParseError:
@@ -210,6 +211,7 @@ class Parser:
                 ErrorCode.UNEXPECTED_STATEMENT, token=token_type.name
             )
 
+        print("node: ", statement_node)
         return statement_node
 
     def parse_variable_declaration(self) -> ast_nodes.VarDecl:
@@ -329,9 +331,9 @@ class Parser:
         token = self.current_token()
 
         # Case 1: Integer Literal
-        if token.type == "INT_LIT":
+        if token.type == TokenType.INT_LIT:
             self.advance()
-            return ast_nodes.Literal(token.value, TokenType.INT)
+            return ast_nodes.IntLiteral(int(token.value))
 
         # Case 2: Variable
         elif token.type == TokenType.IDENT:
@@ -341,12 +343,20 @@ class Parser:
             # SEMANTIC CHECK: Defined?
             if var_name not in self.symbol_table:
                 self.semantic_error(ErrorCode.UNDEFINED_VAR, name=var_name)
-                return ast_nodes.VarUsage(var_name, "UNKNOWN")
+                return ast_nodes.VarUsage(
+                    var_name, TokenType.ERR_LEX
+                )  # unknown type
 
             return ast_nodes(var_name, self.symbol_table[var_name])
 
         # Case 3: Math Operations (Prefix)
-        elif token.type in ["ADD", "SUB", "MULT", "DIV", "MOD"]:
+        elif token.type in [
+            TokenType.ADD,
+            TokenType.SUB,
+            TokenType.MULT,
+            TokenType.DIV,
+            TokenType.MOD,
+        ]:
             op_type = token.type
             self.advance()  # consume operator
 

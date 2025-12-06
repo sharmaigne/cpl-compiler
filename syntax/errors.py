@@ -10,6 +10,9 @@ class ErrorCode:
     MISSING_IOL = "Program must start with 'IOL'."
     MISSING_LOI = "Program must end with 'LOI'."
     CODE_AFTER_LOI = "Code found after 'LOI'. Program must end there."
+    INVALID_EXPRESSION = (
+        "Invalid expression start. Token '{token}' cannot start an expression."
+    )
 
     # Semantic (Variables)
     DUPLICATE_VAR = "Variable '{name}' is already defined."
