@@ -51,6 +51,14 @@ class OutputStmt(ASTNode):
         return f"Output({self.expr})"
 
 
+class NewlineStmt(ASTNode):
+    def __init__(self):
+        pass
+
+    def __repr__(self):
+        return "NewlineStmt()"
+
+
 class BinOp(ASTNode):
     def __init__(self, op, left, right):
         self.op = op
