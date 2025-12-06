@@ -30,9 +30,8 @@ class Parser:
     def __init__(self, token_file):
         self.tokens: list[Token] = self.load_tokens(token_file)
         self.current_idx = 0
-        self.symbol_table: dict[str, TokenType] = (
-            {}
-        )  # Stores { variable_name: TokenType.INT or TokenType.STR }
+        # Stores { variable_name: TokenType.INT or TokenType.STR }
+        self.symbol_table: dict[str, TokenType] = {}
         self.errors = []
         self.ast = None
 
@@ -230,7 +229,7 @@ class Parser:
         if var_name in self.symbol_table:
             self.semantic_error(ErrorCode.DUPLICATE_VAR, name=var_name)
 
-        self.symbol_table[var_name] = declared_type.name  # register variable
+        self.symbol_table[var_name] = declared_type  # register variable
 
         init_expr = None
 

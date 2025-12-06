@@ -102,8 +102,8 @@ def test_assignment():
     # stmt 0 is Decl, stmt 1 is Assignment
     assign_stmt = ast.statements[1]
     assert isinstance(assign_stmt, ast_nodes.Assignment)
-    assert assign_stmt.name == "x"
-    assert assign_stmt.value.value == 10
+    assert assign_stmt.var_name == "x"
+    assert assign_stmt.expr.value == 10
 
 
 def test_input():
