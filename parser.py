@@ -4,20 +4,19 @@ class Token:
         # Removing < and >
         content = raw_text.strip()[1:-1]
 
+        parts = list(map(lambda x: x.strip(), content.split()))
+        self.type = parts[0]
+
         # Parsing parts
-        if " = " in content:
+        if parts[1] == "=":
             # Case: IDENT = num1 [2,5] or INT_LIT = 10 [2,13]
-            parts = content.split()
-            self.type = parts[0].strip()
-            self.value = parts[2].strip()
+            self.value = parts[2]
             self.location = parts[3]  # [line,col]
 
         else:
             # Case: IOL [1,1] or ADD [13,6]
-            parts = content.rsplit(" ", 1)
-            self.type = parts[0].strip()
             self.value = None
-            self.location = parts[1] if len(parts) > 1 else "[?,?]"
+            self.location = parts[1]
 
     def __repr__(self):
         return f"Token({self.type}, {self.value}, {self.location})"
