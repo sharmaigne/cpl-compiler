@@ -22,3 +22,7 @@ class ErrorCode:
     MATH_OPERAND_ERROR = (
         "Operation {op} requires INT operands. Found {t1} and {t2}."
     )
+
+
+class ParseError(Exception):
+    pass

@@ -1,4 +1,5 @@
-from errors import ErrorCode
+import ast_nodes
+from errors import ErrorCode, ParseError
 
 
 class Token:
@@ -24,16 +25,13 @@ class Token:
         return f"Token({self.type}, {self.value}, {self.location})"
 
 
-class ParseError(Exception):
-    pass
-
-
 class Parser:
     def __init__(self, token_file):
         self.tokens = self.load_tokens(token_file)
         self.current_idx = 0
         self.symbol_table = {}  # Stores { variable_name: "INT" or "STR" }
         self.errors = []
+        self.ast = None
 
     def load_tokens(self, file_obj):
         token_list = []
@@ -85,7 +83,6 @@ class Parser:
         final_msg = (
             f"[{error_type}] Error at {token.location}: {formatted_message}"
         )
-
         self.errors.append(final_msg)
         return final_msg
 
@@ -145,12 +142,12 @@ class Parser:
     #       RECURSIVE DESCENT FUNCTIONS
     # ==========================================
 
-    def parse(self):
+    def parse(self) -> ast_nodes.Program:
         """Entry point for parsing"""
         if not self.tokens:
-            return False
+            return ast_nodes.Program([])  # Empty program
 
-        self.parse_program()
+        program = self.parse_program()
 
         # If we finish parse_program and there are tokens left (except EOF), that's an issue
         if (
@@ -159,10 +156,13 @@ class Parser:
         ):
             self.semantic_error(ErrorCode.CODE_AFTER_LOI)
 
-        return True
+        self.ast = program
+        return program
 
-    def parse_program(self):
+    def parse_program(self) -> ast_nodes.Program:
         """Program ::= IOL <statements> LOI EOF"""
+
+        statements = []
         try:
             self.match("IOL")
         except ParseError:
@@ -170,14 +170,17 @@ class Parser:
 
         while self.current_token().type != "LOI":
             try:
-                self.parse_statement()
+                statement = self.parse_statement()
+                statements.append(statement)
             except ParseError:
                 self.synchronize()
 
         self.match("LOI")
         self.match("EOF")
 
-    def parse_statement(self):
+        return ast_nodes.Program(statements)
+
+    def parse_statement(self) -> ast_nodes.ASTNode:
         """
         Determines which statement to parse based on the current token.
         Options:
@@ -188,6 +191,7 @@ class Parser:
         5. Newline: NEWLN
         """
         token_type = self.current_token().type
+        statement_node = None
 
         if token_type == "ERR_LEX":
             self.lexical_error(
@@ -195,19 +199,21 @@ class Parser:
             )
             self.advance()
         elif token_type in ["INT", "STR"]:
-            self.parse_variable_declaration()
+            statement_node = self.parse_variable_declaration()
         elif token_type == "INTO":
-            self.parse_assignment()
+            statement_node = self.parse_assignment()
         elif token_type == "BEG":
-            self.parse_input()
+            statement_node = self.parse_input()
         elif token_type == "PRINT":
-            self.parse_output()
+            statement_node = self.parse_output()
         elif token_type == "NEWLN":
             self.match("NEWLN")
         else:
             self.syntax_error(ErrorCode.UNEXPECTED_STATEMENT, token=token_type)
 
-    def parse_variable_declaration(self):
+        return statement_node
+
+    def parse_variable_declaration(self) -> ast_nodes.VarDecl:
         """
         VarDecl ::= 'INT' Ident [ 'IS' Expression ]
                 |   'STR' Ident [ 'IS' Ident ]
@@ -222,22 +228,24 @@ class Parser:
         # SEMANTIC CHECK: Duplicate Declaration
         if var_name in self.symbol_table:
             self.semantic_error(ErrorCode.DUPLICATE_VAR, name=var_name)
+        self.symbol_table[var_name] = declared_type  # register variable
 
-        # Register variable
-        self.symbol_table[var_name] = declared_type
+        init_expr = None
 
         # Check for optional initialization: IS value
         if self.current_token().type == "IS":
             self.advance()
             if declared_type == "INT":
-                expr_type = self.parse_expression()
-                if expr_type != "INT":
+                init_expr = self.parse_expression()
+
+                if init_expr.eval_type != "INT":
                     self.semantic_error(
                         ErrorCode.TYPE_MISMATCH,
-                        expr_type=expr_type,
+                        expr_type=init_expr.eval_type,
                         target_type="INT",
                         name=var_name,
                     )
+
             elif declared_type == "STR":
                 val_token = self.match("IDENT")
                 source_var = val_token.value
@@ -255,7 +263,11 @@ class Parser:
                         name=var_name,
                     )
 
-    def parse_assignment(self):
+                init_expr = ast_nodes.VarUsage(source_var, "STR")
+
+        return ast_nodes.VarDecl(declared_type, var_name, init_expr)
+
+    def parse_assignment(self) -> ast_nodes.Assignment:
         """
         Assignment ::= 'INTO' Ident 'IS' Expression
         """
@@ -281,7 +293,9 @@ class Parser:
                 name=var_name,
             )
 
-    def parse_input(self):
+        return ast_nodes.Assignment(var_name, expr_type)
+
+    def parse_input(self) -> ast_nodes.InputStmt:
         """
         Input ::= 'BEG' Ident
         """
@@ -293,14 +307,17 @@ class Parser:
         if var_name not in self.symbol_table:
             self.semantic_error(ErrorCode.UNDEFINED_VAR, name=var_name)
 
-    def parse_output(self):
+        return ast_nodes.InputStmt(var_name)
+
+    def parse_output(self) -> ast_nodes.OutputStmt:
         """
         Output ::= 'PRINT' Expression
         """
         self.match("PRINT")
-        self.parse_expression()
+        expr = self.parse_expression()
+        return ast_nodes.OutputStmt(expr)
 
-    def parse_expression(self):
+    def parse_expression(self) -> ast_nodes.ASTNode | None:
         """
         Parses an expression and returns its TYPE ("INT" or "STR").
         Handles:
@@ -313,7 +330,7 @@ class Parser:
         # Case 1: Integer Literal
         if token.type == "INT_LIT":
             self.advance()
-            return "INT"
+            return ast_nodes.Literal(token.value, "INT")
 
         # Case 2: Variable
         elif token.type == "IDENT":
@@ -323,8 +340,9 @@ class Parser:
             # SEMANTIC CHECK: Defined?
             if var_name not in self.symbol_table:
                 self.semantic_error(ErrorCode.UNDEFINED_VAR, name=var_name)
+                return ast_nodes.VarUsage(var_name, "UNKNOWN")
 
-            return self.symbol_table[var_name]
+            return ast_nodes(var_name, self.symbol_table[var_name])
 
         # Case 3: Math Operations (Prefix)
         elif token.type in ["ADD", "SUB", "MULT", "DIV", "MOD"]:
@@ -332,16 +350,19 @@ class Parser:
             self.advance()  # consume operator
 
             # Recursively parse left and right operands
-            type1 = self.parse_expression()
-            type2 = self.parse_expression()
+            left_node = self.parse_expression()
+            right_node = self.parse_expression()
 
             # SEMANTIC CHECK: Math requires INTs
-            if type1 != "INT" or type2 != "INT":
+            if left_node.eval_type != "INT" or right_node.eval_type != "INT":
                 self.semantic_error(
-                    ErrorCode.MATH_OPERAND_ERROR, op=op_type, t1=type1, t2=type2
+                    ErrorCode.MATH_OPERAND_ERROR,
+                    op=op_type,
+                    t1=left_node.eval_type,
+                    t2=right_node.eval_type,
                 )
 
-            return "INT"  # Result of math is always INT
+            return ast_nodes.BinOp(op_type, left_node, right_node)
 
         else:
             self.syntax_error(ErrorCode.INVALID_EXPRESSION, token=token.type)
