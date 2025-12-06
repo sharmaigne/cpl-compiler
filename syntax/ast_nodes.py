@@ -56,6 +56,7 @@ class BinOp(ASTNode):
         self.op = op
         self.left = left
         self.right = right
+        self.eval_type = TokenType.INT
 
     def __repr__(self):
         op_str = self.op.name if hasattr(self.op, "name") else repr(self.op)
