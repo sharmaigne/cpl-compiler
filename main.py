@@ -1,11 +1,14 @@
 import io
 import tkinter as tk
 from tkinter import filedialog as fd
+from tkinter import simpledialog as sd
 
+from evaluator import Evaluator
 from lexer import Lexer
 from panels.console import ConsolePanel
 from panels.editor import EditorPanel
 from panels.output import OutputPanel
+from syntax.parser import Parser
 
 
 class App(tk.Tk):
@@ -25,6 +28,12 @@ class App(tk.Tk):
 
         self.init_editor_panel()
         self.init_console_panel()
+
+        # state
+        self.ast = None
+        self.tokens = []
+        self.is_dirty = True  # True if code has changed since last compile
+        self.last_compile_success = False
 
         self.cleanup()
 
@@ -74,6 +83,23 @@ class App(tk.Tk):
         self.left_separator.add(
             self.editor_panel, height=self.winfo_vrootheight() * 3 / 5
         )
+        self.editor_panel.editor.bind("<KeyRelease>", self.on_code_modified)
+
+    def on_code_modified(self, event=None):
+        """Called whenever the user types in the editor."""
+        # Ignore navigation keys to prevent false positives
+        if event and event.keysym in [
+            "Up",
+            "Down",
+            "Left",
+            "Right",
+            "Control_L",
+        ]:
+            return
+
+        self.is_dirty = True
+        self.last_compile_success = False
+        self.ast = None
 
     def cleanup(self):
         """
@@ -87,6 +113,10 @@ class App(tk.Tk):
             console.delete("1.0", "end")
 
         self.is_tokenized = False
+        self.is_dirty = True
+        self.last_compile_success = False
+        self.ast = None
+        self.tokens = []
 
     def file_new(self):
         self.cleanup()
@@ -109,32 +139,79 @@ class App(tk.Tk):
             content = f.readlines()
             self.editor_panel.editor.insert("1.0", "".join(content))
 
-    def compile_tokenize(self):
-        stream = io.StringIO(self.editor_panel.editor.get("1.0", "end").strip())
-        lexer = Lexer(stream)
+        self.is_dirty = True
 
-        lexer.tokenize()
+    def compile_code(self):
+        """
+        Performs Lexical Analysis and Parsing.
+        Updates the console with success or error messages.
+        """
+        # 1. Reset Console
+        with self.console_panel.console as console:
+            console.delete("1.0", "end")
 
-        # write into .tkn file
-        with open(f"{self.file_name.rstrip('.iol')}.tkn", "w") as f:
-            f.writelines("\n".join(map(str, lexer.tokens)))
-
-        self.is_tokenized = True
-
-        # write results into console
-        self.console_panel.display_tokenization_result(lexer.tokens)
-
-    def display_tokenized(self):
-        if not self.is_tokenized:
+        # 2. Get content
+        content = self.editor_panel.editor.get("1.0", "end").strip()
+        if not content:
             with self.console_panel.console as console:
-                console.insert("end", "No tokenized code found.\n")
-
+                console.insert("end", "Error: Source code is empty.\n")
             return
 
-        with open(f"{self.file_name.rstrip('.iol')}.tkn", "r") as f:
-            lines = f.readlines()
+        # 3. LEXICAL ANALYSIS
+        stream = io.StringIO(content)
+        lexer = Lexer(stream)
+        lexer.tokenize()
 
-        self.console_panel.display_tokenized_code(lines)
+        self.tokens = lexer.tokens  # Store for display
+
+        base_name = self.file_name
+        if base_name.endswith(".iol"):
+            base_name = base_name[:-4]  # Remove last 4 chars (.iol)
+
+        # Save .tkn file
+        with open(f"{base_name}.tkn", "w") as f:
+            f.writelines("\n".join(map(str, lexer.tokens)))
+
+        # 4. PARSING
+        token_stream_str = "\n".join(map(str, lexer.tokens))
+        parser_input = io.StringIO(token_stream_str)
+        parser = Parser(parser_input)
+
+        self.ast = parser.parse()
+
+        # 5. RESULT DISPLAY & STATE UPDATES
+        with self.console_panel.console as console:
+            if parser.errors:
+                self.last_compile_success = False
+                self.is_dirty = True
+
+                console.insert("end", "Compile Unsuccessful. Errors found:\n\n")
+                for err in parser.errors:
+                    console.insert("end", f"{err}\n")
+            else:
+                self.last_compile_success = True
+                self.is_dirty = False  # Code is now clean
+                self.output_panel.display_variables(parser.symbol_table)
+
+                console.insert(
+                    "end",
+                    f"Analysis successful.\n{self.file_name} compiled with no errors found.\n",
+                )
+
+    def display_tokenized(self):
+        """Displays the tokens from the last compilation."""
+        # Check memory instead of file
+        if not self.tokens:
+            with self.console_panel.console as console:
+                console.insert(
+                    "end",
+                    "\n[System] No tokenized code found. Please Compile first.\n",
+                )
+            return
+
+        formatted_tokens = [f"{str(token)}\n" for token in self.tokens]
+
+        self.console_panel.display_tokenized_code(formatted_tokens)
 
     def file_save(self):
         content = self.editor_panel.editor.get("1.0", "end").strip()
@@ -184,6 +261,56 @@ class App(tk.Tk):
 
         self.update_title(self.file_name)
 
+    def append_output(self, text):
+        """Callback for the Evaluator to print to the ConsolePanel."""
+        # Using the context manager pattern from console.py
+        with self.console_panel.console as console:
+            console.insert("end", f"{text}")
+            console.see("end")
+
+    def request_input(self, prompt_text):
+        """Callback for the Evaluator to get input via Popup."""
+        return sd.askstring("Program Input", prompt_text, parent=self)
+
+    def execute_code(self):
+        """Executes the Evaluator using the AST generated by compile_code."""
+
+        # --- ADD THESE GUARD CLAUSES ---
+        with self.console_panel.console as console:
+            # Check for compilation errors first
+            if not self.last_compile_success or not self.ast:
+                console.insert(
+                    "end",
+                    "\n[System] Error: Compilation failed or not performed. Please fix errors and Compile first.\n",
+                )
+                return
+
+            if self.is_dirty:
+                console.insert(
+                    "end",
+                    "\n[System] Error: Source code has been modified. Please Compile first.\n",
+                )
+                return
+        # -------------------------------
+
+        if hasattr(self.output_panel, "text_area"):
+            self.output_panel.text_area.delete("1.0", "end")
+
+        try:
+            # --- UPDATE: Use self.ast instead of re-parsing ---
+            evaluator = Evaluator(
+                self.ast,
+                on_print=self.append_output,
+                on_input=self.request_input,
+            )
+
+            self.append_output("\n--- Program Execution Start ---\n")
+            evaluator.evaluate()
+            self.append_output("\n--- Program Execution End ---\n")
+
+        except Exception as e:
+            self.append_output(f"\nRuntime Error: {str(e)}")
+
 
 class AppMenu(tk.Menu):
     def __init__(self, parent, *args, **kwargs) -> None:
@@ -209,8 +336,8 @@ class AppMenu(tk.Menu):
         menu_compile = tk.Menu(self)
 
         menu_compile.add_command(
-            label="Tokenize",
-            command=self.parent.compile_tokenize,
+            label="Compile Code",
+            command=self.parent.compile_code,
         )
 
         menu_compile.add_command(
@@ -222,7 +349,9 @@ class AppMenu(tk.Menu):
     def init_execute_menu(self):
         menu_execute = tk.Menu(self)
 
-        # TODO: add execute commands
+        menu_execute.add_command(
+            label="Run Program", command=self.parent.execute_code
+        )
 
         self.add_cascade(menu=menu_execute, label="Execute")
 

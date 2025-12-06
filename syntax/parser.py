@@ -170,16 +170,22 @@ class Parser:
         except ParseError:
             self.synchronize()
 
-        while self.current_token().type != TokenType.LOI:
+        while (
+            self.current_token().type != TokenType.LOI
+            and self.current_token().type != TokenType.EOF
+        ):
             try:
-                print("Parsing statement at token:", self.current_token())
                 statement = self.parse_statement()
                 statements.append(statement)
             except ParseError:
                 self.synchronize()
 
-        self.match(TokenType.LOI)
-        self.match(TokenType.EOF)
+        if self.current_token().type == TokenType.EOF:
+            self.semantic_error(ErrorCode.MISSING_LOI)
+            self.match(TokenType.EOF)
+            return ast_nodes.Program(statements)
+        else:
+            self.match(TokenType.LOI)
 
         return ast_nodes.Program(statements)
 
@@ -211,7 +217,6 @@ class Parser:
                 ErrorCode.UNEXPECTED_STATEMENT, token=token_type.name
             )
 
-        print("node: ", statement_node)
         return statement_node
 
     def parse_variable_declaration(self) -> ast_nodes.VarDecl:
@@ -343,9 +348,8 @@ class Parser:
             # SEMANTIC CHECK: Defined?
             if var_name not in self.symbol_table:
                 self.semantic_error(ErrorCode.UNDEFINED_VAR, name=var_name)
-                return ast_nodes.VarUsage(var_name)  # unknown type
 
-            return ast_nodes(var_name, self.symbol_table[var_name])
+            return ast_nodes.VarUsage(var_name)
 
         # Case 3: Math Operations (Prefix)
         elif token.type in [
@@ -376,8 +380,10 @@ class Parser:
                 self.semantic_error(
                     ErrorCode.MATH_OPERAND_ERROR,
                     op=op_type.name,
-                    t1=left_node.eval_type.name,
-                    t2=right_node.eval_type.name,
+                    t1=self.symbol_table.get(left_node.name, TokenType.ERR_LEX),
+                    t2=self.symbol_table.get(
+                        right_node.name, TokenType.ERR_LEX
+                    ),
                 )
 
             return ast_nodes.BinOp(op_type, left_node, right_node)
