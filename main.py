@@ -277,17 +277,18 @@ class App(tk.Tk):
 
         # --- ADD THESE GUARD CLAUSES ---
         with self.console_panel.console as console:
-            if self.is_dirty:
-                console.insert(
-                    "end",
-                    "\n[System] Error: Source code has been modified. Please Compile first.\n",
-                )
-                return
-
+            # Check for compilation errors first
             if not self.last_compile_success or not self.ast:
                 console.insert(
                     "end",
                     "\n[System] Error: Compilation failed or not performed. Please fix errors and Compile first.\n",
+                )
+                return
+
+            if self.is_dirty:
+                console.insert(
+                    "end",
+                    "\n[System] Error: Source code has been modified. Please Compile first.\n",
                 )
                 return
         # -------------------------------
